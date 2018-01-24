@@ -1,0 +1,65 @@
+<html>
+
+<head>
+</head>
+
+
+<body>
+    Hello world
+    <script src="https://cdn.ethers.io/scripts/ethers-app-v0.2.min.js" type="text/javascript">
+    </script>
+
+    <table id='blocks'>
+        <tr>
+            <th>Block # </th>
+            <th>Hash</th>
+            <th>Timestamp</th>
+        </tr>
+    </table>
+
+    <script>
+        ethers.onready = function(){
+            updateBlocks();
+            getValue();
+
+        }
+
+        function getValue() {
+            var abi = [{"constant":true,"inputs":[],"name":"getValue","outputs":[{"name":"","type":"string"}],"type":"function"},{"constant":false,"inputs":[{"name":"value","type":"string"}],"name":"setValue","outputs":[],"type":"function"},{"anonymous":false,"inputs":[{"indexed":false,"name":"oldValue","type":"string"},{"indexed":false,"name":"newValue","type":"string"}],"name":"valueChanged","type":"event"}];
+
+            var address = '0x954de93d9f1cd1e2e3ae5964f614cdcc821fac64';
+
+            var contract = ethers.getContract(address, abi);
+
+            contract.getValue().then(function(result) {
+                console.log('getValue: ' + result[0]);
+            });
+        }
+
+        function updateBlocks() {
+            var last_block_num = ethers.blockchain.getBlockNumber();
+
+            last_block_num.then(function(num) {
+                for (var i=0; i<10; i++) {
+                    ethers.blockchain.getBlock(num - i).then(function(block){
+                        printBlocks(block);
+                    })
+                }
+            })
+        }
+
+        function printBlocks(block) {
+            var table = document.getElementById('blocks');
+            var row = table.insertRow(-1)
+            var cell1 = row.insertCell(0);
+            var cell2 = row.insertCell(1);
+            var cell3 = row.insertCell(2);
+
+            cell1.innerHTML = block.number;
+            cell2.innerHTML = block.hash;
+            cell3.innerHTML = block.timestamp;
+        }
+    </script>
+</body>
+
+</html>
