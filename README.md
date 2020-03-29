@@ -1,3 +1,3 @@
-# Crypto Playground
+# Playground
 
 Scratch pad for different ideas
