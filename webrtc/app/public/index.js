@@ -221,3 +221,9 @@ function trace(text) {
 
   console.log(now, text);
 }
+
+const socket = io.connect('http://localhost:3000/signalling');
+socket.on('news', (data) => {
+  console.log(data);
+  socket.emit('my other event', { my: 'data' });
+});
