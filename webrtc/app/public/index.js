@@ -11,7 +11,7 @@ const mediaStreamConstraints = {
 };
 
 // configure STUN and TURN servers here
-const rtc_config = {
+const webrtcConfig = {
   iceServers: [{urls: "stun:stun.stunprotocol.org"}]
 };
 
@@ -30,8 +30,8 @@ let remoteStream;
 let localPeerConnection;
 let remotePeerConnection;
 
-async function createLocalPeer(rtc_config) {
-  const peer = new RTCPeerConnection(rtc_config);
+async function createLocalPeer(webrtcConfig) {
+  const peer = new RTCPeerConnection(webrtcConfig);
   trace('LOCAL peer created');
 
   peer.onicecandidate = async (event) => {
@@ -51,8 +51,8 @@ async function createLocalPeer(rtc_config) {
   return peer;
 }
 
-async function createRemotePeer(rtc_config) {
-  const peer = new RTCPeerConnection(rtc_config);
+async function createRemotePeer(webrtcConfig) {
+  const peer = new RTCPeerConnection(webrtcConfig);
   trace('REMOTE peer created');
 
   peer.onicecandidate = async (event) => {
@@ -171,9 +171,9 @@ async function callAction() {
   const videoTracks = localStream.getVideoTracks();
   const audioTracks = localStream.getAudioTracks();
 
-  localPeerConnection = await createLocalPeer(rtc_config);
+  localPeerConnection = await createLocalPeer(webrtcConfig);
 
-  remotePeerConnection = await createRemotePeer(rtc_config);
+  remotePeerConnection = await createRemotePeer(webrtcConfig);
 
   // Add local stream to connection and create offer to connect.
   localPeerConnection.addStream(localStream);
