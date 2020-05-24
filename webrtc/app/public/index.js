@@ -14,7 +14,7 @@ const rtcConfig = {
 };
 
 const offerOptions = {
-  offerToReceiveVideo: 1,
+  iceRestart: true // required to get webrtc working for newly joined peers
 };
 
 const peersDiv = document.getElementById('peers');
@@ -80,10 +80,8 @@ async function establishOutConnection(peerId, stream) {
 
   stream.getTracks().forEach(track => conn.addTrack(track, stream));
 
-  const offer = await conn.createOffer(offerOptions);
-  await conn.setLocalDescription(offer);
-
-  socket.emit('webrtc', {to: peerId, offer: offer});
+  await conn.setLocalDescription(await conn.createOffer(offerOptions));
+  socket.emit('webrtc', {to: peerId, offer: conn.localDescription});
 }
 
 async function establishInConnection(peerId, offer, video) {
@@ -111,17 +109,13 @@ async function establishInConnection(peerId, offer, video) {
     }
 
     await conn.setRemoteDescription(offer);
-    const answer = await conn.createAnswer();
-    await conn.setLocalDescription(answer);
-
-    socket.emit('webrtc', {to: peerId, answer: answer});
-
-    return conn;
+    await conn.setLocalDescription(await conn.createAnswer());
+    socket.emit('webrtc', {to: peerId, answer: conn.localDescription});
 }
 
 async function sendStream(stream) {
     state.peers.forEach(async (peerId) => {
-        // if (peerId == myId) return;
+        if (peerId == myId) return;
         await establishOutConnection(peerId, stream);
     });
 }
