@@ -10,7 +10,7 @@ app.use(express.static('app/public'));
 app.use('/adapter.js', express.static('node_modules/webrtc-adapter/out/adapter.js'));
 
 const server = Server(app);
-const io = socketIO(server).of('/signalling');
+const io = socketIO(server);
 
 let state = {
     peers: [],
@@ -18,7 +18,7 @@ let state = {
 }
 
 function update() {
-    state.peers = Object.keys(io.sockets);
+    state.peers = Object.keys(io.sockets.sockets);
     return state;
 }
 

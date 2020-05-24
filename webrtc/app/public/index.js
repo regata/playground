@@ -133,7 +133,7 @@ function disconnectStream() {
     });
 }
 
-const socket = io.connect('http://localhost:3000/signalling');
+const socket = io.connect('http://localhost:3000');
 
 let connectionsIn = new Map();
 let connectionsOut = new Map();
