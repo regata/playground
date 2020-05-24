@@ -121,7 +121,7 @@ async function establishInConnection(peerId, offer, video) {
 
 async function sendStream(stream) {
     state.peers.forEach(async (peerId) => {
-        // if (id == myId) return;
+        if (id == myId) return;
         await establishOutConnection(peerId, stream);
     });
 }
