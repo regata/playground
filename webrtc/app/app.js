@@ -22,14 +22,21 @@ function update() {
     return state;
 }
 
+function webrtcMessageType(msg) {
+    const types = new Set(['incandidate', 'outcandidate', 'offer', 'answer']);
+    for (const key of Object.keys(msg)) {
+        if (types.has(key)) return key.toUpperCase();
+    }
+}
+
 io.on('connect', (socket) => {
-    console.log(`connect: ${socket.id}`);
+    console.log(`on connect: ${socket.id}`);
     console.log(update());
 
     io.emit('update', update());
 
     socket.on('disconnect', () => {
-        console.log(`disconnect: peer_id = ${socket.id}`);
+        console.log(`on disconnect: peer_id = ${socket.id}`);
         io.emit('update', update());
     });
 
@@ -39,8 +46,14 @@ io.on('connect', (socket) => {
             return;
         }
 
+        const msgType = webrtcMessageType(msg);
+        if (!msgType) {
+            console.warn(`Wrong message type: msg.keys = ${Object.keys(msg)}`);
+            return;
+        }
+
         const from = socket.id;
-        console.log(`webrtc: ${Object.keys(msg)} from ${from} to ${msg.to}`);
+        console.log(`on webrtc: ${msgType} from ${from} to ${msg.to}`);
         io.to(msg.to).emit('webrtc', from, msg);
     });
 });

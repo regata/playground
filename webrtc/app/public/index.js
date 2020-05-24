@@ -121,7 +121,7 @@ async function establishInConnection(peerId, offer, video) {
 
 async function sendStream(stream) {
     state.peers.forEach(async (peerId) => {
-        if (peerId == myId) return;
+        // if (peerId == myId) return;
         await establishOutConnection(peerId, stream);
     });
 }
@@ -142,7 +142,7 @@ let state = null;
 
 socket.on('connect', () => {
     myId = socket.id;
-    console.log(`connected: myId = ${myId}`);
+    console.log(`on connect: myId = ${myId}`);
 });
 
 socket.on('update', async (newState) => {
@@ -179,7 +179,16 @@ socket.on('update', async (newState) => {
     }
 });
 
+function webrtcMessageType(msg) {
+    const types = new Set(['incandidate', 'outcandidate', 'offer', 'answer']);
+    for (const key of Object.keys(msg)) {
+        if (types.has(key)) return key.toUpperCase();
+    }
+}
+
 socket.on('webrtc', async (from, msg) => {
+    console.log(`on webrtc: ${webrtcMessageType(msg)} from ${from}`);
+
     if (!state.peers.includes(from)) {
         console.error(`Got a message from missing peer ${from}`);
         console.error(Object.keys(msg));
