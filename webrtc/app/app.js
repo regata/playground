@@ -39,8 +39,9 @@ io.on('connect', (socket) => {
             return;
         }
 
-        console.log(`webrtc: ${Object.keys(msg)} from ${msg.from} to ${msg.to}`);
-        io.to(msg.to).emit('webrtc', msg);
+        const from = socket.id;
+        console.log(`webrtc: ${Object.keys(msg)} from ${from} to ${msg.to}`);
+        io.to(msg.to).emit('webrtc', from, msg);
     });
 });
 

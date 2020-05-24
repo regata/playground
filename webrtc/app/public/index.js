@@ -72,7 +72,7 @@ async function establishOutConnection(peerId, stream) {
     const iceCandidate = event.candidate;
     if (iceCandidate) {
         socket.emit('webrtc',
-                    {to: peerId, from: myId, incandidate: iceCandidate});
+                    {to: peerId, incandidate: iceCandidate});
     } else {
         // All ICE candidates have been sent
     }
@@ -83,7 +83,7 @@ async function establishOutConnection(peerId, stream) {
   const offer = await conn.createOffer(offerOptions);
   await conn.setLocalDescription(offer);
 
-  socket.emit('webrtc', {to: peerId, from: myId, offer: offer});
+  socket.emit('webrtc', {to: peerId, offer: offer});
 }
 
 async function establishInConnection(peerId, offer, video) {
@@ -100,7 +100,7 @@ async function establishInConnection(peerId, offer, video) {
         const iceCandidate = event.candidate;
         if (iceCandidate) {
             socket.emit('webrtc',
-                        {to: peerId, from: myId, outcandidate: iceCandidate});
+                        {to: peerId, outcandidate: iceCandidate});
         } else {
             // All ICE candidates have been sent
         }
@@ -114,14 +114,14 @@ async function establishInConnection(peerId, offer, video) {
     const answer = await conn.createAnswer();
     await conn.setLocalDescription(answer);
 
-    socket.emit('webrtc', {to: peerId, from: myId, answer: answer});
+    socket.emit('webrtc', {to: peerId, answer: answer});
 
     return conn;
 }
 
 async function sendStream(stream) {
     state.peers.forEach(async (peerId) => {
-        if (id == myId) return;
+        if (peerId == myId) return;
         await establishOutConnection(peerId, stream);
     });
 }
@@ -179,9 +179,7 @@ socket.on('update', async (newState) => {
     }
 });
 
-socket.on('webrtc', async (msg) => {
-    const from = msg.from;
-    
+socket.on('webrtc', async (from, msg) => {
     if (!state.peers.includes(from)) {
         console.error(`Got a message from missing peer ${from}`);
         console.error(Object.keys(msg));
