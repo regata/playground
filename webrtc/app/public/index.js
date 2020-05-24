@@ -1,229 +1,228 @@
 'use strict';
 
-// Based on https://github.com/googlecodelabs/webrtc-web
-
-// Set up media stream constant and parameters.
-
-// In this codelab, you will be streaming video only: "video: true".
-// Audio will not be streamed because it is set to "audio: false" by default.
 const mediaStreamConstraints = {
   video: true,
 };
 
 // configure STUN and TURN servers here
-const webrtcConfig = {
-  iceServers: [{urls: "stun:stun.stunprotocol.org"}]
+const rtcConfig = {
+    iceServers: [{
+        urls: "stun:stun.services.mozilla.com",
+        username: "louis@mozilla.com", 
+        credential: "webrtcdemo"
+    }]
 };
 
-// Set up to exchange only video.
 const offerOptions = {
   offerToReceiveVideo: 1,
 };
 
-// Define peer connections, streams and video elements.
-const localVideo = document.getElementById('localVideo');
-const remoteVideo = document.getElementById('remoteVideo');
+const peersDiv = document.getElementById('peers');
+const videoButton = document.getElementById('startVideo');
+const myVideo = document.getElementById('myVideo');
 
-let localStream;
-let remoteStream;
+videoButton.addEventListener('click', startStopVideo);
 
-let localPeerConnection;
-let remotePeerConnection;
+let stream;
 
-async function createLocalPeer(webrtcConfig) {
-  const peer = new RTCPeerConnection(webrtcConfig);
-  trace('LOCAL peer created');
+async function startStopVideo() {
+    this.disabled = true;
 
-  peer.onicecandidate = async (event) => {
+    const shouldStart = this.innerText == 'Start my video';
+
+    if (shouldStart) {
+        stream = await window.navigator.mediaDevices.getUserMedia(
+            mediaStreamConstraints);
+        myVideo.srcObject = stream;
+
+        await sendStream(stream);
+    } else {
+        myVideo.srcObject = null;
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+        disconnectStream();
+    }
+
+    this.innerText = shouldStart ? 'Stop my video' : 'Start my video';
+    this.disabled = false;
+}
+
+function createVideoElement(peerId) {
+    const video = document.createElement('video');
+    video.id = peerId;
+    video.width = 200;
+    video.height = 200;
+    video.autoplay = true;
+    return video;
+}
+
+async function establishOutConnection(peerId, stream) {
+  if (connectionsOut.has(peerId)) {
+    console.warn(`overwriting existing outbound conn for ${peerId}`);
+    connectionsOut.get(peerId).close();
+    connectionsOut.delete(peerId);
+  }
+
+  console.log(`Establishing outbound connection to ${peerId}`);
+  
+  const conn = new RTCPeerConnection(rtcConfig);
+  connectionsOut.set(peerId, conn);
+
+  conn.onicecandidate = (event) => {
     const iceCandidate = event.candidate;
     if (iceCandidate) {
-        // trace(`LOCAL got iceCandidate: ${iceCandidate.candidate}`);
-        await sendToRemote('icecandidate', iceCandidate);
+        socket.emit('webrtc',
+                    {to: peerId, from: myId, incandidate: iceCandidate});
     } else {
         // All ICE candidates have been sent
     }
   };
 
-  peer.oniceconnectionstatechange = (event) => {
-    trace(`LOCAL connection state changed: ${peer.iceConnectionState}`);
-  };
+  stream.getTracks().forEach(track => conn.addTrack(track, stream));
 
-  return peer;
+  const offer = await conn.createOffer(offerOptions);
+  await conn.setLocalDescription(offer);
+
+  socket.emit('webrtc', {to: peerId, from: myId, offer: offer});
 }
 
-async function createRemotePeer(webrtcConfig) {
-  const peer = new RTCPeerConnection(webrtcConfig);
-  trace('REMOTE peer created');
-
-  peer.onicecandidate = async (event) => {
-      const iceCandidate = event.candidate;
-      if (iceCandidate) {
-          // trace(`REMOTE got iceCandidate: ${iceCandidate.candidate}`);
-          await sendToLocal('icecandidate', iceCandidate);
-      } else {
-          // All ICE candidates have been sent
-      }
-  };
-
-  peer.oniceconnectionstatechange = (event) => {
-    trace(`REMOTE connection state changed: ${peer.iceConnectionState}`);
-  };
-
-  peer.ontrack = (event) => {
-    // TODO: check whether we need MediaStream and how to support multiple streams
-    // const mediaStream = new MediaStream(event.streams);
-    remoteStream = event.streams[0];
-    remoteVideo.srcObject = remoteStream;
-    trace('REMOTE added remote stream');
-  }
- 
-  return peer;
-}
-
-// Signalling mocks
-
-// local -> remote
-async function sendToRemote(what, msg) {
-    switch(what) {
-        case 'icecandidate':
-            await remotePeerConnection.addIceCandidate(msg);
-            // trace(`REMOTE added candidate: ${msg.candidate}`);
-            break;
-        case 'offer':
-            await remotePeerConnection.setRemoteDescription(msg);
-            trace(`REMOTE set remote offer`);
-            const answer = await remotePeerConnection.createAnswer();
-            trace(`REMOTE created answer`);
-            await remotePeerConnection.setLocalDescription(answer);
-            return answer;
-        default:
-            console.error(what, msg);
+async function establishInConnection(peerId, offer, video) {
+    if (connectionsIn.has(peerId)) {
+        console.warn(`overwriting existing inbound conn for ${peerId}`);
+        connectionsIn.get(peerId).close();
+        connectionsIn.delete(peerId);
     }
-}
 
-// remote -> local
-async function sendToLocal(what, msg) {
-    switch(what) {
-        case 'icecandidate':
-            await localPeerConnection.addIceCandidate(msg);
-            // trace(`LOCAL added candidate: ${msg.candidate}`);
-            break;
-        case 'answer':
-            await localPeerConnection.setRemoteDescription(msg);
-            break;
-        default:
-            console.error(what, msg);
+    const conn = new RTCPeerConnection(rtcConfig);
+    connectionsIn.set(peerId, conn);
+
+    conn.onicecandidate = (event) => {
+        const iceCandidate = event.candidate;
+        if (iceCandidate) {
+            socket.emit('webrtc',
+                        {to: peerId, from: myId, outcandidate: iceCandidate});
+        } else {
+            // All ICE candidates have been sent
+        }
+    };
+
+    conn.ontrack = (event) => {
+      video.srcObject = event.streams[0];
     }
+
+    await conn.setRemoteDescription(offer);
+    const answer = await conn.createAnswer();
+    await conn.setLocalDescription(answer);
+
+    socket.emit('webrtc', {to: peerId, from: myId, answer: answer});
+
+    return conn;
 }
 
-// Define MediaStreams callbacks.
-// Add behavior for video streams.
-
-// Logs a message with the id and size of a video element.
-function logVideoLoaded(event) {
-  const video = event.target;
-  trace(`${video.id} videoWidth: ${video.videoWidth}px, ` +
-        `videoHeight: ${video.videoHeight}px.`);
+async function sendStream(stream) {
+    state.peers.forEach(async (peerId) => {
+        // if (id == myId) return;
+        await establishOutConnection(peerId, stream);
+    });
 }
 
-// Logs a message with the id and size of a video element.
-// This event is fired when video begins streaming.
-function logResizedVideo(event) {
-  logVideoLoaded(event);
-}
-
-localVideo.addEventListener('loadedmetadata', logVideoLoaded);
-remoteVideo.addEventListener('loadedmetadata', logVideoLoaded);
-remoteVideo.addEventListener('onresize', logResizedVideo);
-
-// Define and add behavior to buttons.
-const startButton = document.getElementById('startButton');
-const callButton = document.getElementById('callButton');
-const hangupButton = document.getElementById('hangupButton');
-
-// Set up initial action buttons status: disable call and hangup.
-callButton.disabled = true;
-hangupButton.disabled = true;
-
-// Handles start button action: creates local MediaStream.
-async function startAction() {
-  startButton.disabled = true;
-  trace('Requesting local stream.');
-
-  try {
-    localStream = await window.navigator.mediaDevices.getUserMedia(
-        mediaStreamConstraints);
-    localVideo.srcObject = localStream;
-    trace('Received local stream.');
-    callButton.disabled = false;  // Enable call button.
-  } catch (err) {
-    console.error(err);
-  }
-}
-
-// Handles call button action: creates peer connection.
-async function callAction() {
-  trace('Starting call.');
-  callButton.disabled = true;
-  hangupButton.disabled = false;
-
-  // Get local media stream tracks.
-  const videoTracks = localStream.getVideoTracks();
-  const audioTracks = localStream.getAudioTracks();
-
-  localPeerConnection = await createLocalPeer(webrtcConfig);
-
-  remotePeerConnection = await createRemotePeer(webrtcConfig);
-
-  // Add local stream to connection and create offer to connect.
-  localPeerConnection.addStream(localStream);
-  trace('LOCAL added stream');
-
-  try {
-    const offer = await localPeerConnection.createOffer(offerOptions);
-    trace(`LOCAL created offer`);
-    await localPeerConnection.setLocalDescription(offer);
-    trace(`LOCAL set local offer`);
-
-    // send offer to remote
-    const answer = await sendToRemote('offer', offer);
-
-    // send answer to local
-    await sendToLocal('answer', answer);
-  } catch(err) {
-    console.error(err);
-  }
-}
-
-// Handles hangup action: ends up call, closes connections and resets peers.
-function hangupAction() {
-  localPeerConnection.close();
-  remotePeerConnection.close();
-  localPeerConnection = null;
-  remotePeerConnection = null;
-  hangupButton.disabled = true;
-  callButton.disabled = false;
-  trace('Ending call.');
-}
-
-// Add click event handlers for buttons.
-startButton.addEventListener('click', startAction);
-callButton.addEventListener('click', callAction);
-hangupButton.addEventListener('click', hangupAction);
-
-
-// Define helper functions.
-
-// Logs an action (text) and the time when it happened on the console.
-function trace(text) {
-  text = text.trim();
-  const now = (window.performance.now() / 1000).toFixed(3);
-
-  console.log(now, text);
+function disconnectStream() {
+    connectionsOut.forEach( (conn, peerId) => {
+        conn.close();
+        connectionsOut.delete(peerId);
+    });
 }
 
 const socket = io.connect('http://localhost:3000/signalling');
-socket.on('news', (data) => {
-  console.log(data);
-  socket.emit('my other event', { my: 'data' });
+
+let connectionsIn = new Map();
+let connectionsOut = new Map();
+let myId = null;
+let state = null;
+
+socket.on('connect', () => {
+    myId = socket.id;
+    console.log(`connected: myId = ${myId}`);
+});
+
+socket.on('update', async (newState) => {
+    console.log(`on update: ${JSON.stringify(newState)}`);
+    peersCount.innerText = newState.peers.length;
+
+    state = newState;
+
+    for (const id of connectionsIn.keys()) {
+        if (state.peers.indexOf(id) == -1) {
+            const conn = connectionsIn.get(id);
+            conn.close();
+            connectionsIn.delete(id);
+            let video = document.getElementById(id);
+            if (video) video.remove();
+        }
+    }
+
+    for (const id of connectionsOut.keys()) {
+        if (state.peers.indexOf(id) == -1) {
+            const conn = connectionsOut.get(id);
+            conn.close();
+            connectionsOut.delete(id);
+        }
+    }
+
+    if (stream) {
+        state.peers.forEach( async peerId => {
+            if (!connectionsOut.has(peerId) && peerId != myId) {
+                // TODO: check why new peers don't get connection established properly
+                await establishOutConnection(peerId, stream);
+            }
+        });
+    }
+});
+
+socket.on('webrtc', async (msg) => {
+    const from = msg.from;
+    
+    if (!state.peers.includes(from)) {
+        console.error(`Got a message from missing peer ${from}`);
+        console.error(Object.keys(msg));
+        return;
+    }
+    
+    if (msg.incandidate) {
+        const conn = connectionsIn.get(from);
+        if (!conn) {
+            console.error(`Got an incandidate from ${from} without a connection`);
+            return;
+        }
+        await conn.addIceCandidate(new RTCIceCandidate(msg.incandidate));
+    }
+
+    if (msg.outcandidate) {
+        const conn = connectionsOut.get(from);
+        if (!conn) {
+            console.error(`Got an outcandidate from ${from} without a connection`);
+            return;
+        }
+        await conn.addIceCandidate(new RTCIceCandidate(msg.outcandidate));
+    }
+
+    if (msg.offer) {
+        let video = document.getElementById(from);
+        if (video) video.remove();
+
+        video = createVideoElement(from);
+        document.getElementById('peers').appendChild(video);
+
+        await establishInConnection(from, msg.offer, video);
+    }
+
+    if (msg.answer) {
+        const conn = connectionsOut.get(from);
+        if (!conn) {
+            console.error(`Got an answer from ${from} without a connection`);
+            return;
+        }
+
+        await conn.setRemoteDescription(new RTCSessionDescription(msg.answer));
+    }
 });

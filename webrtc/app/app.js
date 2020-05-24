@@ -10,16 +10,39 @@ app.use(express.static('app/public'));
 app.use('/adapter.js', express.static('node_modules/webrtc-adapter/out/adapter.js'));
 
 const server = Server(app);
-const io = socketIO(server);
+const io = socketIO(server).of('/signalling');
 
-const signalling = io.of('signalling')
-    .on('connection', (socket) => {
-        console.log(`new connection: ${socket}`);
-        socket.emit('news', { hello: 'world' });
-        socket.on('my other event', (data) => {
-          console.log(data);
-        });
+let state = {
+    peers: [],
+    presenter: null
+}
+
+function update() {
+    state.peers = Object.keys(io.sockets);
+    return state;
+}
+
+io.on('connect', (socket) => {
+    console.log(`connect: ${socket.id}`);
+    console.log(update());
+
+    io.emit('update', update());
+
+    socket.on('disconnect', () => {
+        console.log(`disconnect: peer_id = ${socket.id}`);
+        io.emit('update', update());
     });
+
+    socket.on('webrtc', (msg) => {
+        if (!state.peers.includes(msg.to)) {
+            console.error(`webrtc: missing recipient ${msg.to}`);
+            return;
+        }
+
+        console.log(`webrtc: ${Object.keys(msg)} from ${msg.from} to ${msg.to}`);
+        io.to(msg.to).emit('webrtc', msg);
+    });
+});
 
 server.listen(port, () => {
     console.log(`http://localhost:${port}`);

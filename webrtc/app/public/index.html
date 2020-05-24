@@ -8,14 +8,14 @@
 <body>
   <h1>WebRTC Demo</h1>
 
-  <video id="localVideo" autoplay playsinline></video>
-  <video id="remoteVideo" autoplay playsinline></video>
+  <p>Peers: <span id="peersCount">0</span></p>
 
   <div>
-    <button id="startButton">Start</button>
-    <button id="callButton">Call</button>
-    <button id="hangupButton">Hang Up</button>
+    <video id="myVideo"  autoplay playsinline width=150 height=150></video>
   </div>
+  <button id="startVideo">Start my video</button>
+
+  <div id="peers"></div>
 </body>
 
 <script src="/socket.io/socket.io.js"></script>
