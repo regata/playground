@@ -7,9 +7,8 @@ const mediaStreamConstraints = {
 // configure STUN and TURN servers here
 const rtcConfig = {
     iceServers: [{
-        urls: "stun:stun.services.mozilla.com",
-        username: "louis@mozilla.com", 
-        credential: "webrtcdemo"
+        urls: ['stun:stun.l.google.com:19302',
+               'stun:stun1.l.google.com:19302']
     }]
 };
 
@@ -53,7 +52,30 @@ function createVideoElement(peerId) {
     video.width = 200;
     video.height = 200;
     video.autoplay = true;
+    // the code below is to get things working in chrome
+    video.muted = true;
+    video.onloadedmetadata = (event) => {
+      video.play();
+    };
     return video;
+}
+
+function addStateDebugHandlers(kind, conn) {
+  conn.oniceconnectionstatechange = (event) => {
+    console.log(`${kind} oniceconnectionstatechange: ${conn.iceConnectionState}`);
+  };
+
+  conn.onicegatheringstatechange = (event) => {
+    console.log(`${kind} onicegatheringstatechange: ${conn.iceGatheringState}`);
+  };
+
+  conn.onsignalingstatechange = (event) => {
+    console.log(`${kind} onsignalingstatechange: ${conn.signalingState}`);
+  };
+
+  conn.onconnectionstatechange = (event) => {
+    console.log(`${kind} onconnectionstatechange: ${conn.connectionState}`);
+  }
 }
 
 async function establishOutConnection(peerId, stream) {
@@ -67,6 +89,8 @@ async function establishOutConnection(peerId, stream) {
   
   const conn = new RTCPeerConnection(rtcConfig);
   connectionsOut.set(peerId, conn);
+
+  // addStateDebugHandlers('OUT', conn);
 
   conn.onicecandidate = (event) => {
     const iceCandidate = event.candidate;
@@ -93,6 +117,8 @@ async function establishInConnection(peerId, offer, video) {
 
     const conn = new RTCPeerConnection(rtcConfig);
     connectionsIn.set(peerId, conn);
+
+    // addStateDebugHandlers('IN', conn);
 
     conn.onicecandidate = (event) => {
         const iceCandidate = event.candidate;
@@ -181,7 +207,7 @@ function webrtcMessageType(msg) {
 }
 
 socket.on('webrtc', async (from, msg) => {
-    console.log(`on webrtc: ${webrtcMessageType(msg)} from ${from}`);
+    // console.log(`on webrtc: ${webrtcMessageType(msg)} from ${from}`);
 
     if (!state.peers.includes(from)) {
         console.error(`Got a message from missing peer ${from}`);
@@ -195,7 +221,9 @@ socket.on('webrtc', async (from, msg) => {
             console.error(`Got an incandidate from ${from} without a connection`);
             return;
         }
-        await conn.addIceCandidate(new RTCIceCandidate(msg.incandidate));
+        const c = new RTCIceCandidate(msg.incandidate);
+        // console.log(c);
+        await conn.addIceCandidate(c);
     }
 
     if (msg.outcandidate) {
@@ -204,7 +232,9 @@ socket.on('webrtc', async (from, msg) => {
             console.error(`Got an outcandidate from ${from} without a connection`);
             return;
         }
-        await conn.addIceCandidate(new RTCIceCandidate(msg.outcandidate));
+        const c = new RTCIceCandidate(msg.outcandidate);
+        // console.log(c);
+        await conn.addIceCandidate(c);
     }
 
     if (msg.offer) {
