@@ -10,7 +10,7 @@ app.use(express.static('app/public'));
 app.use('/adapter.js', express.static('node_modules/webrtc-adapter/out/adapter.js'));
 
 const server = Server(app);
-const io = socketIO(server).of('/signalling');
+const io = socketIO(server);
 
 let state = {
     peers: [],
@@ -18,18 +18,25 @@ let state = {
 }
 
 function update() {
-    state.peers = Object.keys(io.sockets);
+    state.peers = Object.keys(io.sockets.sockets);
     return state;
 }
 
+function webrtcMessageType(msg) {
+    const types = new Set(['incandidate', 'outcandidate', 'offer', 'answer']);
+    for (const key of Object.keys(msg)) {
+        if (types.has(key)) return key.toUpperCase();
+    }
+}
+
 io.on('connect', (socket) => {
-    console.log(`connect: ${socket.id}`);
+    console.log(`on connect: ${socket.id}`);
     console.log(update());
 
     io.emit('update', update());
 
     socket.on('disconnect', () => {
-        console.log(`disconnect: peer_id = ${socket.id}`);
+        console.log(`on disconnect: peer_id = ${socket.id}`);
         io.emit('update', update());
     });
 
@@ -39,8 +46,15 @@ io.on('connect', (socket) => {
             return;
         }
 
-        console.log(`webrtc: ${Object.keys(msg)} from ${msg.from} to ${msg.to}`);
-        io.to(msg.to).emit('webrtc', msg);
+        const msgType = webrtcMessageType(msg);
+        if (!msgType) {
+            console.warn(`Wrong message type: msg.keys = ${Object.keys(msg)}`);
+            return;
+        }
+
+        const from = socket.id;
+        console.log(`on webrtc: ${msgType} from ${from} to ${msg.to}`);
+        io.to(msg.to).emit('webrtc', from, msg);
     });
 });
 
