@@ -31,6 +31,7 @@ const shareButton = document.getElementById('shareScreen');
 const myVideo = document.getElementById('myVideo');
 
 videoButton.addEventListener('click', startStopVideo);
+shareButton.addEventListener('click', startStopSharing);
 
 async function startStopVideo() {
     this.disabled = true;
@@ -51,6 +52,15 @@ async function startStopVideo() {
     }
 
     this.innerText = shouldStart ? 'Stop my video' : 'Start my video';
+    this.disabled = false;
+}
+
+async function startStopSharing() {
+    this.disabled = true;
+
+    const shouldStart = this.innerText == 'Share my screen';
+
+    this.innerText = shouldStart ? 'Stop sharing' : 'Share my screen';
     this.disabled = false;
 }
 
