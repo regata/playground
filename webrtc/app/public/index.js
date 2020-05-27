@@ -16,13 +16,21 @@ const offerOptions = {
   iceRestart: true // required to get webrtc working for newly joined peers
 };
 
+let stream;
+
+const socket = io.connect('http://localhost:3000');
+
+let connectionsIn = new Map();
+let connectionsOut = new Map();
+let myId = null;
+let state = null;
+
 const peersDiv = document.getElementById('peers');
 const videoButton = document.getElementById('startVideo');
+const shareButton = document.getElementById('shareScreen');
 const myVideo = document.getElementById('myVideo');
 
 videoButton.addEventListener('click', startStopVideo);
-
-let stream;
 
 async function startStopVideo() {
     this.disabled = true;
@@ -153,13 +161,6 @@ function disconnectStream() {
     });
 }
 
-const socket = io.connect('http://localhost:3000');
-
-let connectionsIn = new Map();
-let connectionsOut = new Map();
-let myId = null;
-let state = null;
-
 socket.on('connect', () => {
     myId = socket.id;
     console.log(`on connect: myId = ${myId}`);
@@ -192,7 +193,6 @@ socket.on('update', async (newState) => {
     if (stream) {
         state.peers.forEach( async peerId => {
             if (!connectionsOut.has(peerId) && peerId != myId) {
-                // TODO: check why new peers don't get connection established properly
                 await establishOutConnection(peerId, stream);
             }
         });
