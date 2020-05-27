@@ -1,7 +1,13 @@
 'use strict';
 
 const mediaStreamConstraints = {
-  video: true,
+  video: true
+};
+
+const displayMediaOptions = {
+    video: {
+        cursor: "always"
+    }
 };
 
 // configure STUN and TURN servers here
@@ -17,6 +23,7 @@ const offerOptions = {
 };
 
 let videoStream;
+let screenStream;
 
 const socket = io.connect('http://localhost:3000');
 
@@ -29,6 +36,7 @@ const peersDiv = document.getElementById('peers');
 const videoButton = document.getElementById('startVideo');
 const shareButton = document.getElementById('shareScreen');
 const myVideo = document.getElementById('myVideo');
+const shareScreenVideo = document.getElementById('presentation');
 
 videoButton.addEventListener('click', startStopVideo);
 shareButton.addEventListener('click', startStopSharing);
@@ -59,6 +67,15 @@ async function startStopSharing() {
     this.disabled = true;
 
     const shouldStart = this.innerText == 'Share my screen';
+
+    if (shouldStart) {
+        screenStream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
+        shareScreenVideo.srcObject = screenStream;
+    } else {
+        shareScreenVideo.srcObject = null;
+        screenStream.getTracks().forEach(track => track.stop());
+        screenStream = null;
+    }
 
     this.innerText = shouldStart ? 'Stop sharing' : 'Share my screen';
     this.disabled = false;
