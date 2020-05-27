@@ -16,7 +16,7 @@ const offerOptions = {
   iceRestart: true // required to get webrtc working for newly joined peers
 };
 
-let stream;
+let videoStream;
 
 const socket = io.connect('http://localhost:3000');
 
@@ -39,15 +39,15 @@ async function startStopVideo() {
     const shouldStart = this.innerText == 'Start my video';
 
     if (shouldStart) {
-        stream = await window.navigator.mediaDevices.getUserMedia(
+        videoStream = await window.navigator.mediaDevices.getUserMedia(
             mediaStreamConstraints);
-        myVideo.srcObject = stream;
+        myVideo.srcObject = videoStream;
 
-        await sendStream(stream);
+        await sendStream(videoStream);
     } else {
         myVideo.srcObject = null;
-        stream.getTracks().forEach(track => track.stop());
-        stream = null;
+        videoStream.getTracks().forEach(track => track.stop());
+        videoStream = null;
         disconnectStream();
     }
 
@@ -200,10 +200,10 @@ socket.on('update', async (newState) => {
         }
     }
 
-    if (stream) {
+    if (videoStream) {
         state.peers.forEach( async peerId => {
             if (!connectionsOut.has(peerId) && peerId != myId) {
-                await establishOutConnection(peerId, stream);
+                await establishOutConnection(peerId, videoStream);
             }
         });
     }
