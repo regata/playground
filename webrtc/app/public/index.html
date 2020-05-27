@@ -10,14 +10,16 @@
 
   <p>Peers: <span id="peersCount">0</span></p>
   <div>
-    <video id="myVideo"  autoplay playsinline width=150 height=150></video>
+    <video id="myVideo" autoplay playsinline width=150 height=150></video>
   </div>
   <button id="startVideo">Start my video</button>
   <button id="shareScreen">Share my screen</button>
 
   <div id="peers"></div>
 
-  <div id="presentation" style="height: 500px;width: 500px;"></div>
+  <div>
+    <video id="presentation" autoplay playsinline style="height: 500px;width: 500px;"></video>
+  </div>
 </body>
 
 <script src="/socket.io/socket.io.js"></script>
