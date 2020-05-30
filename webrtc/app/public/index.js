@@ -24,6 +24,8 @@ const offerOptions = {
 
 let videoStream;
 let screenStream;
+let videoTransceiver;
+let screenTransceiver;
 
 const socket = io.connect('http://localhost:3000');
 
@@ -50,7 +52,7 @@ async function startStopVideo() {
         videoStream = await window.navigator.mediaDevices.getUserMedia(
             mediaStreamConstraints);
         myVideo.srcObject = videoStream;
-        await sendStream(videoStream);
+        await sendStreamsToPeers();
     } else {
         myVideo.srcObject = null;
         videoStream.getTracks().forEach(track => track.stop());
@@ -70,7 +72,7 @@ async function startStopSharing() {
     if (shouldStart) {
         screenStream = await navigator.mediaDevices.getDisplayMedia(displayMediaOptions);
         shareScreenVideo.srcObject = screenStream;
-        await sendStream(screenStream);
+        await sendStreamsToPeers();
     } else {
         shareScreenVideo.srcObject = null;
         screenStream.getTracks().forEach(track => track.stop());
@@ -113,7 +115,7 @@ function addStateDebugHandlers(kind, conn) {
   }
 }
 
-async function establishOutConnection(peerId, stream) {
+async function establishOutConnection(peerId, streams) {
   let conn;
   if (!connectionsOut.has(peerId)) {
     console.log(`Establishing outbound connection to ${peerId}`);
@@ -131,18 +133,32 @@ async function establishOutConnection(peerId, stream) {
         // All ICE candidates have been sent
       }
     };
+
+    videoTransceiver = conn.addTransceiver('video', {direction: "sendonly"});
+    screenTransceiver = conn.addTransceiver('video', {direction: "sendonly"});
+
+    await conn.setLocalDescription(await conn.createOffer(offerOptions));
+    socket.emit('webrtc', {to: peerId, offer: conn.localDescription});
   } else {
     console.log(`Updating outbound connection to ${peerId}`);
     conn = connectionsOut.get(peerId);
   }
 
-  stream.getTracks().forEach(track => conn.addTrack(track, stream));
+  // stream.getTracks().forEach(track => conn.addTrack(track, stream));
+  // create transceiver for each stream
+  streams.forEach((stream, type) => {
+    const track = stream.getVideoTracks()[0];
+    if (type == 'video') {
+      videoTransceiver.sender.replaceTrack(track);
+    }
 
-  await conn.setLocalDescription(await conn.createOffer(offerOptions));
-  socket.emit('webrtc', {to: peerId, offer: conn.localDescription});
+    if (type == 'screen') {
+      screenTransceiver.sender.replaceTrack(track);
+    }
+  });
+
 }
 
-let tmp;
 async function establishInConnection(peerId, offer, video) {
     let conn;
     if (!connectionsIn.has(peerId)) {
@@ -168,8 +184,22 @@ async function establishInConnection(peerId, offer, video) {
     }
 
     conn.ontrack = (event) => {
-        tmp = event;
-        video.srcObject = event.streams[0];
+        const transceiver = event.transceiver;
+
+        if (transceiver.mid == conn.getTransceivers()[0].mid) {
+            video.srcObject = new MediaStream([transceiver.receiver.track]);
+        }
+
+        if (transceiver.mid == conn.getTransceivers()[1].mid) {
+            // HACK ALERT!
+            video = document.getElementById('presentation');
+            // enable autoplay
+            video.muted = true;
+            video.onloadedmetadata = (event) => {
+                video.play();
+            };
+            video.srcObject = new MediaStream([transceiver.receiver.track]);
+        }
     };
 
     await conn.setRemoteDescription(offer);
@@ -177,10 +207,24 @@ async function establishInConnection(peerId, offer, video) {
     socket.emit('webrtc', {to: peerId, answer: conn.localDescription});
 }
 
-async function sendStream(stream) {
+async function sendStreamsToPeers() {
+    let streams = new Map();
+
+    if (videoStream) {
+        streams.set('video', videoStream);
+    }
+
+    if (screenStream) {
+        streams.set('screen', screenStream);
+    }
+
+    if (streams.size == 0) {
+        return;
+    }
+
     state.peers.forEach(async (peerId) => {
         if (peerId == myId) return;
-        await establishOutConnection(peerId, stream);
+        await establishOutConnection(peerId, streams);
     });
 }
 
@@ -220,13 +264,7 @@ socket.on('update', async (newState) => {
         }
     }
 
-    if (videoStream) {
-        state.peers.forEach( async peerId => {
-            if (!connectionsOut.has(peerId) && peerId != myId) {
-                await establishOutConnection(peerId, videoStream);
-            }
-        });
-    }
+    sendStreamsToPeers();
 });
 
 function webrtcMessageType(msg) {
@@ -269,15 +307,7 @@ socket.on('webrtc', async (from, msg) => {
 
     if (msg.offer) {
         let video = document.getElementById(from);
-        if (video) {
-            // HACK ALERT: we assume that the second video stream is sccree
-            video = document.getElementById('presentation');
-            // enable autoplay
-            video.muted = true;
-            video.onloadedmetadata = (event) => {
-                video.play();
-            };
-        } else {
+        if (!video) {
             video = createVideoElement(from);
             document.getElementById('peers').appendChild(video);
         }
